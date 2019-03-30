@@ -1,0 +1,177 @@
+\documentclass{article} %article 文档
+\usepackage{enumerate}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{ctex}  %使用宏包(为了能够显示汉字)
+\title{计算机网络实验：第一周实验}  %文章标题
+\author{秦宏 2016K8009929009}   %作者的名称
+\date{\today}       %日期
+% 设置页面的环境,a4纸张大小，左右上下边距信息
+\usepackage[a4paper,left=10mm,right=10mm,top=15mm,bottom=15mm]{geometry}  
+\pgfplotsset{compat=1.9,width=15cm}
+\begin{document}
+	\maketitle          %添加这一句才能够显示标题等信息
+	\begin{section}{互联网协议实验}
+		\begin{subsection}{实验内容}
+		\begin{enumerate}[1)]
+			\item 在节点h1上开启wireshark抓包，用wget下载www.baidu.com页面。
+			\item 调研说明wireshark抓到的几种协议\\
+			ARP,DNS,TCP,HTTP
+			\item 调研解释h1下载baidu页面的整个过程\\
+			几种协议的运行机制
+		\end{enumerate}
+	\end{subsection}
+	\begin{subsection}{实验流程}
+		\begin{enumerate}[1)]
+			\item 搭建实验环境
+			\begin{enumerate}[(1)]
+				\item sudo apt install wireshark
+				\item sudo mn -nat
+				\item mininet>xterm h1
+				\item h1\# echo "nameserver 1.2.4.8">/etc/resolv.conf
+				\item h1\# wireshark \&
+			\end{enumerate}
+			\item 实验步骤
+			h1\# wget www.baidu.com
+			\item 观察wireshark输出
+		\end{enumerate}
+	\end{subsection}
+	\begin{subsection}{实验结果}
+		\begin{figure}[h]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{lab_1.eps}	
+			\caption{实验整体截图}
+		\end{figure}
+		在执行wget www.baidu.com指令后，分别产生了ARP、DNS、TCP、HTTP几种协议的内容,如图1。下面解释各协议内容的含义。
+		\begin{subsubsection}{协议说明}
+			\begin{enumerate}[1)]
+				\item ARP协议:Address Resolution Protocol,地址解析协议，是一个TCP/IP协议，主要作用为根据IP地址获取物理地址，主要用于IP地址查询MAC地址。主机可以根据网络层IP数据包包头的IP地址信息解析出目标硬件地址(MAC)信息。主机中有一个ARP缓存，用来存储最近的IP地址和对应的MAC地址，地址解析时首先查找ARP缓冲，若没有，再从本地网络中广播ARP请求和本机的IP和MAC地址，接受请求的主机向本机返回MAC地址，并且更新本机的ARP缓存，建立通信。
+				\begin{figure}[htb]	
+					\centering
+					\includegraphics[scale=0.3]{DNS-UDP.eps}	
+					\caption{基于UDP的DNS协议}
+				\end{figure}
+				\begin{figure}[htb]	
+					\centering
+					\includegraphics[scale=0.3]{HTTP-TCP.eps}	
+					\caption{基于TCP的HTTP协议}
+				\end{figure}
+				\item DNS协议:Domain Name System,域名系统，用于将域名转换为IP地址，或者将IP地址转换为域名。域名服务基于UDP实现(图2)，域名解析通过查询域名服务器完成解析，其中域名服务器分级，由本地域名服务器可以一直查找到根域名的服务器，最终查找到域名对应的IP地址，域名服务器会有域名对应IP地址的缓存，加速查找过程。
+				\item TCP协议:Transmission Control Protocol,传输控制协议，用于应用层向TCP层发送8字节数据流后，TCP将数据流分割成一定长度报文段作为数据包，数据包传给IP层，最终传给接收端的TCP层。每个包有一个序号，既保证了数据包的按序接收，也防止数据包丢失，TCP通过三次握手，从客户端到服务器，再从服务器到客户端，最后客户端返回到服务器实现了建立连接的正确性，保证了数据传输过程中的正确性。
+				\item HTTP协议: HyperText Transfer Protocol,超文本传输协议，HTTP协议假定下层协议提供可靠传输，因此HTTP协议可以基于TCP协议传输数据(图3)，HTTP协议用于从WWW服务器传输超文本到本地浏览器的传输协议，是客户端浏览器与web服务器之间的应用层通信协议，客户机需要通过HTTP协议传输所要访问的超文本信息。HTTP包含命令和传输信息。客户机与服务器建立连接只要单击某个超级链接，HTTP开始工作；建立连接后，客户机发送一个请求给服务器；服务器接到请求后，给予相应的响应信息；客户端接收服务器所返回的信息通过浏览器显示在用户的显示屏上，然后客户机与服务器断开连接。其中采用TCP协议保证数据传输正确。
+			\end{enumerate}
+		\end{subsubsection}
+	\end{subsection}
+	\begin{subsection}{实验分析}
+		\begin{enumerate}[1)]
+			\item 输入指令 wget www.baidu.com,向本地网络广播出本机的IP和MAC地址。
+			\item 通过域名解析服务，将域名www.baidu.com解析为目标服务器的IP地址，期间访问了本地或者更高级的服务器，IP为1.2.4.8，最终域名服务器返回目标服务器的IP地址61.135.169.125，HTTP连接建立，之后开始传输数据。
+			\item HTTP请求传送开始，形式为TCP的三次握手机制，请求消息转化为TCP协议下的数据包，通过IP层传送到服务器，服务器端处理请求后返回请求内容，即下载百度页面，形式同样为TCP协议下的数据包。
+			\item 客户端接收到服务器传来的数据后，按顺序解析TCP层传来的数据包，并向服务器发送接收到数据包的反馈消息，断开与服务器的连接，数据包信息被应用层解析为百度页面。
+			\item 该次传输使得ARP缓存中保留了www.baidu.com服务器的IP和MAC物理地址。
+		\end{enumerate}
+	\end{subsection}
+	
+	\end{section}
+
+	\begin{section}{流完成时间实验}
+		\begin{subsection}{实验内容}
+			\begin{enumerate}[1)]
+				\item 利用 fct\_exp.py 脚本复现图像
+				\item 调研解释图中现象
+			\end{enumerate}
+		\end{subsection}
+		\begin{subsection}{实验流程}
+			\begin{enumerate}[1)]
+				\item 搭建实验环境
+					\begin{enumerate}[(1)]
+						\item \$ sudo python fct\_exp.py
+						\item mininet>xterm h1 h2
+					\end{enumerate}
+				\item 实验步骤
+					\begin{enumerate}[(1)]
+						\item h2\# dd if=/dev/zero of=1MB.dat bs=1M count=1
+						\item h1\# wget http://10.0.0.2/1MB.bat
+						\item 通过改变脚本中带宽大小和(1)中命令的文件大小，重复(1)(2)步骤，收集传输过程中的时间和速率，绘制图表
+					\end{enumerate}
+			\end{enumerate}
+		\end{subsection}
+		\begin{subsection}{实验结果}
+			\begin{tikzpicture}% function
+			\begin{axis}[
+						title={不同文件大小下平均传输速率与最大带宽的关系},
+						xlabel=带宽大小(MB/s),
+						ylabel=传输速率(MB/s),
+						xmin=1, xmax=1000,
+						ymin=0, ymax=100,
+						xtick={1,10,50,100,500,1000},
+						ytick={0,20,40,60,80,100},]
+			\addplot [color=blue,
+						mark=square,]
+						coordinates{(1,0.113)(10,1.13)(50,4.4)(100,5.76)(500,7.67)(1000,7.74)};
+			\addlegendentry{File size = 1MB}
+			
+			\addplot [color=yellow,
+			mark=square,]
+			coordinates{(10,1.14)(50,5.38)(100,9.79)(500,28.8)(1000,29.1)};
+			\addlegendentry{File size = 50MB}
+			
+			\addplot [color=red,
+			mark=square,]
+			coordinates{(10,1.14)(50,5.56)(100,10.8)(500,47.6)(1000,75.4)};
+			\addlegendentry{File size = 100MB}
+			
+			\addplot [color=black,
+			mark=square,]
+			coordinates{(1,1)(10,10)(50,50)(100,100)};
+			\addlegendentry{File size = BW}
+			\end{axis}
+			\end{tikzpicture}
+			
+			
+			\begin{tikzpicture}% function
+			\begin{axis}[
+			title={不同文件大小下平均相对传输速率与相对最大带宽的关系},
+			xlabel=相对带宽大小(),
+			ylabel=相对传输速率(),
+			xmin=1, xmax=100,
+			ymin=1, ymax=80,
+			xtick={1,5,10,50,100},
+			ytick={0,20,40,60,80},]
+			\addplot [color=blue,
+			mark=square,]
+			coordinates{(1,1)(5,3.89)(10,5.10)(50,6.79)(100,6.85)};
+			\addlegendentry{File size = 1MB}
+			
+			\addplot [color=yellow,
+			mark=square,]
+			coordinates{(1,1)(5,4.72)(10,8.59)(50,25.26)(100,25.53)};
+			\addlegendentry{File size = 50MB}
+			
+			\addplot [color=red,
+			mark=square,]
+			coordinates{(1,1)(5,4.88)(10,9.47)(50,41.75)(100,66.14)};
+			\addlegendentry{File size = 100MB}
+			
+			\addplot [color=black,
+			mark=square,]
+			coordinates{(1,1)(5,5)(10,10)(50,50)(80,80)};
+			\addlegendentry{File size = BW}
+			\end{axis}
+			\end{tikzpicture}
+			\\实验现象如图所示，可以看到
+			\begin{enumerate}[1)]
+				\item 相同的文件传输大小，文件传输速率随着带宽的增加与等带宽速率相差逐渐增加，一定带宽大小后，文件传输速率基本不变。
+				\item 相同的带宽大小，不同的文件传输速率随着传输块的增大其速率随之增加。
+			\end{enumerate}
+		\end{subsection}
+		\begin{subsection}{实验分析}
+			\begin{enumerate}[1)]
+				\item 首先是带宽较小的时候，根据TCP协议，数据包传送过程中会分成多个有序的数据包进行传送，为了保证数据包传输的可靠性，TCP协议下发送端还需要接收来自接收端的确认消息，因此数据包传送时的时间不等于直接带宽大小的时间传输。
+				\item 同时数据包基于TCP协议传输时采取慢启动算法进行传输，简单来讲，就是一开始发送的数据包依线性发送，直到发送端接收到接收端传来的消息后发送速率才会翻倍，因此随着数据包的不断发送，平均速率与总的带宽大小差距增大。
+				\item 对于文件大小1MB和50MB而言，当带宽到达一定值后传输速率不再变化，原因是TCP协议将数据包分为多个包传递，同时要考虑到多个包的正确性和包大小对传输速率的影响，因此当带宽增大到不是限制条件之后，数据包的分解的大小成为定值，不在随带宽增加而改变，因此速率会不变。
+				\item 相同带宽下，不同文件大小的分解后的数据包大小不同，此时带宽是限制条件，因此文件越大，对带宽的利用率越高，相对的传输速率就会越大。
+			\end{enumerate}	
+		\end{subsection}
+	\end{section}
+\end{document}
