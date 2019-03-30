@@ -1,0 +1,184 @@
+\documentclass{article} %article 文档
+\usepackage{enumerate}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{pythonhighlight}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{ctex}  %使用宏包(为了能够显示汉字)
+\title{计算机网络实验：第三周实验}  %文章标题
+\author{秦宏 2016K8009929009}   %作者的名称
+\date{\today}       %日期
+% 设置页面的环境,a4纸张大小，左右上下边距信息
+\usepackage[a4paper,left=10mm,right=10mm,top=15mm,bottom=15mm]{geometry}  
+\pgfplotsset{compat=1.9,width=15cm}  
+ 
+\begin{document}
+\lstset{
+	keywordstyle= \color{ blue!70},
+	commentstyle= \color{red!50!green!50!blue!50}, 
+	frame=shadowbox, % 阴影效果
+	rulesepcolor= \color{ red!20!green!20!blue!20} ,
+	escapeinside=``, % 英文分号中可写入中文
+	xleftmargin=2em,xrightmargin=2em, aboveskip=1em
+}
+	\maketitle          %添加这一句才能够显示标题等信息
+	\begin{section}{广播网络实验}
+		\begin{subsection}{实验内容}
+			\begin{enumerate}[1)]
+				\item 实现节点广播的broadcast\_packet函数。
+				\item 验证广播网络能够正常运行。(从一个节点ping另一个节点)
+				\item 验证广播网络的效率\\
+				在three\_nodes\_bw.py进行iperf测量\\
+				两种场景：H1:iperf client;H2,H3:servers; H1:iperf server;H2,H3:clients。
+				\item 先构建环形拓扑，验证该拓扑下节点广播会产生数据包环路
+			\end{enumerate}
+			\end{subsection}
+		\begin{subsection}{实验流程}
+			\begin{enumerate}[1)]
+				\item 实现节点广播
+					\begin{enumerate}[(1)]
+						\item 实现main.c中的broadcast\_packet函数
+						\item 结果验证\\
+						使用three\_nodes\_bw.py拓扑文件\\
+						三个节点相互ping通。
+					\end{enumerate}
+				\item 广播网络传输效率\\
+				实验验证广播网络的链路利用效率，进行iperf测试，H1分别做客户端和服务器。
+				\item 数据包在环路中不断转发\\
+				建立环形网络拓扑，由H1向H2发送一个数据包，用wireshark监听H2收到的数据包。
+			\end{enumerate}
+			\end{subsection}
+		\begin{subsection}{实验结果}
+			\begin{subsubsection}{实现节点广播}
+				main.c中broad\_packet函数实现如下
+				\begin{lstlisting}[language={[ANSI]C}]
+void broadcast_packet(iface_info_t *iface, const char *packet, int len)
+{
+  iface_info_t *entry, *q;
+  list_for_each_entry_safe(entry, q, &instance->iface_list, list){
+    if(entry->fd != iface->fd){
+	  iface_send_packet(entry, packet, len);
+	  fprintf(stdout, "TODO: broadcast packet here.\n");
+	}
+  }
+// TODO: broadcast packet 
+}
+				\end{lstlisting}
+				编译后运行得到hub程序运行截图如下
+				\begin{figure}[h]	
+					\centering
+					\includegraphics[width=\linewidth,scale=0.1]{hub_1.eps}	
+					\caption{每个节点分别ping其余两个节点的结果}
+				\end{figure}
+			每个节点发出的数据包都被接收，说明三个节点均已通过hub建立连接。
+			\end{subsubsection}
+		\begin{subsubsection}{广播网络传输效率}
+			保持main.c代码不变，H1做客户端时，H2、H3均执行iperf -s做服务器，实验截图如图2\\
+			\begin{figure}[h]	
+				\centering
+				\includegraphics[width=\linewidth,scale=0.1]{h1_Client.eps}	
+				\caption{H1做客户端}
+			\end{figure}
+		由上图可知H1做客户端时带宽大小接近10Mbit/s。H2的链路利用率为0.928，H3的链路利用率为0.935，H1的链路利用效率为0.9385
+		。\\
+		\\
+		H1做服务器时，H1执行iperf -s，实验截图如图3\\
+			\begin{figure}[h]	
+				\centering
+				\includegraphics[width=\linewidth,scale=0.1]{h1_Server.eps}	
+				\caption{H1做服务器 H2为10M}
+			\end{figure}
+		修改H2和H3链路的带宽大小为30M，实验结果如图4\\
+			\begin{figure}[h]	
+				\centering
+				\includegraphics[width=\linewidth,scale=0.1]{h1_Server_30.eps}	
+				\caption{H1做服务器 H2为30M}
+			\end{figure}
+		由图3可知H1做服务器时总带宽大小为17.81Mbit/s，链路利用率为0.8955，H2的链路利用率为0.909，H3的链路利用率为0.895。
+		\end{subsubsection}	
+	\begin{subsubsection}{数据包在环路中不断转发}
+		为了建立环形网络拓扑，需要修改tupo代码，修改如下
+		\begin{python}
+#!/usr/bin/python
+
+import sys
+import os.path
+
+from mininet.topo import Topo
+from mininet.net import Mininet
+from mininet.link import TCLink
+from mininet.cli import CLI
+
+# Mininet will assign an IP address for each interface of a node 
+# automatically, but hub or switch does not need IP address.
+def clearIP(n):
+for iface in n.intfList():
+n.cmd('ifconfig %s 0.0.0.0' % (iface))
+
+class BroadcastTopo(Topo):
+def build(self):
+h1 = self.addHost('h1')
+h2 = self.addHost('h2')
+b1 = self.addHost('b1')
+b2 = self.addHost('b2')
+b3 = self.addHost('b3')
+
+self.addLink(h1, b1, bw=20)
+self.addLink(h2, b2, bw=20)
+self.addLink(b1, b2, bw=20)
+self.addLink(b1, b3, bw=20)
+self.addLink(b2, b3, bw=20)
+
+if __name__ == '__main__':
+if not os.path.exists('/sbin/ethtool'):
+print 'ethtool not found, please install it using `apt install ethtool`'
+sys.exit(1)
+
+topo = BroadcastTopo()
+net = Mininet(topo = topo, link = TCLink, controller = None) 
+
+h1, h2, b1, b2, b3 = net.get('h1', 'h2', 'b1', 'b2', 'b3')
+h1.cmd('ifconfig h1-eth0 10.0.0.1/8')
+h2.cmd('ifconfig h2-eth0 10.0.0.2/8')
+
+clearIP(b1)
+clearIP(b2)
+clearIP(b3)
+
+for h in [ h1, h2, b1, b2, b3 ]:
+h.cmd('./disable_offloading.sh')
+h.cmd('./disable_ipv6.sh')
+
+net.start()
+# b1.cmd('./hub-reference &')
+CLI(net)
+net.stop()	
+		\end{python}
+	这样就可以建立两个主机节点，三个hub节点，编译运行得到结果如下
+		\begin{figure}[h]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{bw_3_1.eps}	
+			\caption{建立环形拓扑}
+		\end{figure}
+	在H1中向H2发送数据包，用wireshark监听结果如图5所示
+			\begin{figure}[h]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{bw_3_2.eps}	
+			\caption{wireshark监测结果}
+		\end{figure}
+	\end{subsubsection}
+		\end{subsection}
+		\begin{subsection}{实验分析}
+			\begin{enumerate}[1)]
+				\item 广播网络传输效率分析\\
+				H1分别处于客户端状态和服务器状态下，数据包的传输带宽保持在接近10M的大小，近似认为该次数据包传输的带宽上限是10M，无论数据包的传输方向是从H1到H2还是H2到H1，传输通路的带宽上限与通路中最小带宽的上限一致。图3这里就是10M，图4这里就是20M
+				\item 数据包在环路中的传输\\
+				如图出现UDP提示，表示收到多个重复数据包，表明数据包多次发送，根据wireshark的监测结果，当H1未发包时，H2未收到数据包，发包后，H2处wireshark的监测结果显示H2处不断接收到数据包，表明三个hub之间形成的环路拓扑导致数据包不断广播传输，使得H2能不断接收到数据包。
+			\end{enumerate}
+		\end{subsection}
+		\begin{subsection}{实验总结}
+			此次实验难度不大，原因是main.c的大部分代码已经实现，只需要按步骤做实验即可。
+		\end{subsection}
+	\end{section}
+\end{document}
