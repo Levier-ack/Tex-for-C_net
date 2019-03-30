@@ -1,0 +1,400 @@
+\documentclass{article} %article 文档
+\usepackage{enumerate}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{ctex}  %使用宏包(为了能够显示汉字)
+\title{计算机网络实验：第二周实验}  %文章标题
+\author{秦宏 2016K8009929009}   %作者的名称
+\date{\today}       %日期
+% 设置页面的环境,a4纸张大小，左右上下边距信息
+\usepackage[a4paper,left=10mm,right=10mm,top=15mm,bottom=15mm]{geometry}  
+\pgfplotsset{compat=1.9,width=15cm}  
+ 
+\begin{document}
+\lstset{
+	keywordstyle= \color{ blue!70},
+	commentstyle= \color{red!50!green!50!blue!50}, 
+	frame=shadowbox, % 阴影效果
+	rulesepcolor= \color{ red!20!green!20!blue!20} ,
+	escapeinside=``, % 英文分号中可写入中文
+	xleftmargin=2em,xrightmargin=2em, aboveskip=1em
+}
+	\maketitle          %添加这一句才能够显示标题等信息
+	\begin{section}{Socket应用编程实验}
+		\begin{subsection}{实验内容}
+			\begin{enumerate}[1)]
+				\item 利用Socket API实现网络通信。
+				\item 实现master发布报文，worker接收后分析TXT文本字母个数。
+				\item 实现若干worker的接收处理，即改变配置文件即可重复任务内容。
+			\end{enumerate}
+			\end{subsection}
+		\begin{subsection}{实验流程}
+			\begin{enumerate}[1)]
+				\item 编译master.c和worker.c文件。
+				\item 运行topo.py文件，并根据配置文件中地址数打开端口。
+				\item h1运行master程序，其余运行worker程序。
+				\item 观察master程序打印出的字母个数统计。
+				\item 修改workers.conf文件中地址个数和topo.py文件中worker个数，重复2)到4)。
+			\end{enumerate}
+			\end{subsection}
+		\begin{subsection}{实验结果}
+			\begin{enumerate}[1)]
+				\item 三个worker下的运行结果，如图所示\\
+					\begin{figure}[htb]	
+						\centering
+						\includegraphics[scale=0.2]{3_worker.eps}	
+						\caption{三个worker下的运行结果}
+					\end{figure}
+				\item 三个worker下的运行结果，如图所示\\
+				\begin{figure}[!htb]	
+					\centering
+					\includegraphics[scale=0.2]{1_worker.eps}	
+					\caption{一个worker下的运行结果}
+				\end{figure}
+				\item 三个worker下的运行结果，如图所示\\
+				\begin{figure}[htb]	
+					\centering
+					\includegraphics[scale=0.2]{4_worker.eps}	
+					\caption{四个worker下的运行结果}
+				\end{figure}
+				\item 可以看到一个、三个和四个worker下的master返回得到的字母个数相同，因此实现了若干worker的任务实现。
+			\end{enumerate}
+		\end{subsection}
+		\begin{subsection}{实验分析}
+			\begin{subsubsection}{结构分析}
+				\begin{enumerate}[1)]
+					\item 实验任务要求读TXT的内容并对字母计数，因此首要任务是获得文件内容属性。
+					\item 然后读配置文件获得需要分配的worker个数，计算得到各个worker的其实和结束位置。
+					\item 基于基本的socket模型建立socket数据结构和网络连接，并生成master要发送的消息字符串，其中需要将文件名长度、起始位置和结束位置转化为字符串合并，中间采用\#号作间隔符。
+					\item 采用select的方式复用I/O处理多个worker返回时的情况。
+					\item 最后根据多个server\_reply的内容合并获得所有的字母总和并打印。
+				\end{enumerate}
+			\end{subsubsection}
+			\begin{subsubsection}{代码分析}
+				\begin{lstlisting}[language={[ANSI]C}]
+int file_name_length = strlen(argv[1]);//获得TXT文件名
+char conf_addr[50] = "/home/qin/doc/03-socket/workers.conf";//配置文件地址
+char ip_addr[10][15];//存储ip地址
+struct stat file_buf;//文件属性
+				\end{lstlisting}
+				上面定义了10个ip地址字符数组，因此该程序能分发的worker最多为10个；file\_buf通过st\_size获得文件字节数。
+				\begin{lstlisting}[language={[ANSI]C}]
+FILE* fp = fopen(conf_addr,"r");
+if (NULL == fp){
+return -1;
+}
+
+int i = 0;
+while(!feof(fp)){//i为ip个数
+	if(fgets(ip_addr[i],100,fp) != NULL){        
+		i++;
+	printf("[%d]ip is %s \n",i,ip_addr[i-1]);
+	}	    
+}
+fclose(fp);
+				\end{lstlisting}
+				利用文件读取函数获得ip地址个数，用i保存。
+				\begin{lstlisting}[language={[ANSI]C}]
+if(stat(argv[1],&file_buf) == -1){
+	return -1;
+}
+int handle_size = file_buf.st_size / i;//每个worker的区间
+
+char sector_ptr[10];
+itoa(sector_ptr,handle_size);
+printf("file size is :%ld\n",file_buf.st_size);//整数转字符串
+printf("sector length is:%s\n",sector_ptr);
+				\end{lstlisting}
+				计算出每个worker分配的任务区间长度，并将文件大小切换为字符串。
+				\begin{lstlisting}[language={[ANSI]C}]
+int sock[10];//定义10个socket
+int len[10] = {0};//用于recv返回
+struct sockaddr_in server[10];//对应的socket数据结构分别定义10组
+char message[10][1000];
+int  server_reply[10][1000];
+
+// create socket
+for(j = 0;j < i; j++){
+  sock[j] = socket(AF_INET, SOCK_STREAM, 0);
+  if(sock[i] == -1){
+	printf("create socket[%d] failed!\n",j);
+	return -1;
+  }
+  printf("socket[%d] created!\n",j);
+
+  server[j].sin_addr.s_addr = inet_addr(ip_addr[j]);//分别分配ip地址
+  server[j].sin_family = AF_INET;
+  server[j].sin_port = htons(12345);
+
+  if(connect(sock[j], (struct sockaddr *)&server[j], sizeof(server[j])) < 0) {
+    printf("connect[%d] failed!",j);
+    return 1;
+  }
+  printf("connected[%d]!\n",j);//建立连接
+
+  //产生消息 = 文件名长度+‘#’+文件名+‘#’+‘起始位置’+‘#’+结束位置+'$'
+  char file_name_length_ch[10];
+  itoa(file_name_length_ch, file_name_length);
+  strcat(message[j],file_name_length_ch);//文件名长度
+
+  strcat(message[j], "#");
+
+  strcat(message[j],argv[1]);
+
+  strcat(message[j], "#");
+
+  char start_addr[10];
+  itoa(start_addr, j * handle_size);
+  strcat(message[j], start_addr);
+
+  strcat(message[j], "#");
+
+  char end_addr[10];
+  if(j == i-1)
+    itoa(end_addr, file_buf.st_size);
+  else
+    itoa(end_addr, (j+1) * handle_size);
+
+  strcat(message[j], end_addr);
+  strcat(message[j], "$");//结束符
+}
+				\end{lstlisting}
+				上述代码完成了连接部分和传递消息的生成。下面初始化select部分。
+				\begin{lstlisting}[language={[ANSI]C}]
+fd_set rfds, rfds_temp;//设置两个fd_set使得select清除之后仍然可以重新使用
+FD_ZERO(&rfds);//清零操作
+FD_ZERO(&rfds_temp);
+
+for (j = 0; j < i; j++){
+  FD_SET(sock[j], &rfds);//加载socket进入fd_set中
+}
+
+for (j = 0; j < i; j++){
+  for(k = 0; k < 26; k++)
+    server_reply[j][k] = 0;//初始化接收返回消息的数据结构
+}
+
+for (j = 0; j < i; j++){    //发送消息，只发送一次
+  printf("message[%d] is %s\n",j,message[j]);
+  if(send(sock[j], message[j], strlen(message[j]), 0) < 0) {
+    printf("send[%d] failed!", j);
+    return -1;
+  }
+}
+				\end{lstlisting}
+				上述代码完成了select初始化，下面进行select的循环部分。
+				\begin{lstlisting}[language={[ANSI]C}]
+while(1){
+
+  FD_ZERO(&rfds_temp);//初始化fd_set
+
+  rfds_temp = rfds;//获得最初的文件描述符集合
+
+  int ready = select(FD_SETSIZE, &rfds_temp, NULL, NULL, NULL);
+  //最后一个参数为NULL表示直到检测到有消息返回才继续进行
+  if(ready == 0){
+	printf("time out!\n");
+  }
+  else if(ready < 0){
+	printf("select failed!\n");
+  }
+  else{
+	printf("get socket %d!\n",ready);
+  }
+
+  for (j = 0; j < i; j++){//循环检测是否收到消息
+	if(FD_ISSET(sock[j], &rfds_temp)){
+	  len[j] = recv(sock[j], server_reply[j], 104, 0);
+	  if (len[j] < 0) {
+		printf("recv failed");
+		break;
+	  }
+  	  server_reply[j][len[j]] = 0;
+  	  m++;
+  	  printf("k is %d\n",m);
+ 	}
+  }      
+  if(m == i)//当worker全部返回，跳出循环
+	break;
+}
+// receive a reply from the server
+for (k = 0; k < 26; k++){//26个字母个数分别相加并打印结果
+  for(j = 1; j < i; j++)
+	server_reply[0][k] += (server_reply[j][k]);
+	printf("%c : %d\n", k + 'a', server_reply[0][k]);
+}
+				\end{lstlisting}
+				上述是master.c代码部分，下面开始worker.c代码部分。
+				\begin{lstlisting}[language={[ANSI]C}]
+if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+  perror("create socket failed");
+  return -1;
+}
+printf("socket created\n");
+
+// prepare the sockaddr_in structure
+server.sin_family = AF_INET;
+server.sin_addr.s_addr = INADDR_ANY;
+server.sin_port = htons(12345);
+
+// bind
+if (bind(s,(struct sockaddr *)&server, sizeof(server)) < 0) {
+  perror("bind failed");
+  return -1;
+}
+printf("bind done\n");
+fflush(stdout);
+// listen
+listen(s, 3);
+printf("waiting for incoming connections...\n");
+
+// accept connection from an incoming client
+int c = sizeof(struct sockaddr_in);
+if ((cs = accept(s, (struct sockaddr *)&client, (socklen_t *)&c)) < 0) {
+  perror("accept failed");
+  return -1;
+}
+printf("connection accepted\n");
+fflush(stdout);
+				\end{lstlisting}
+				socket模型连接部分来自example内容，具体不再解释。下面是消息解析和处理循环。
+				\begin{lstlisting}[language={[ANSI]C}]
+while ((msg_len = recv(cs, msg, sizeof(msg), 0)) > 0) {
+
+  for( i = 0; i < 26; i++)//每次处理都要初始化变量
+	al_set[i] = 0;
+  i = 0;
+  j = 0;
+  file_addr_length = 0;
+  start_addr = 0;
+  end_addr = 0;
+//字符串解析
+  do{
+    file_addr_length = msg[i] - '0' + 10*file_addr_length;
+    i++;
+  }while(msg[i] != '#');//获取文件名长度
+
+  while(j < file_addr_length){
+	file_addr[j] = msg[i+1];
+	i++;
+	j++;
+  }//msg[i] = "#"；获取文件地址
+
+  i++;
+
+  do{
+  	start_addr = msg[i+1] - '0' + 10*start_addr;
+	i++;
+  }while(msg[i+1] != '#');//获取初始位置
+
+  i++;
+
+  do{
+	end_addr = msg[i+1] - '0' + 10*end_addr;
+	i++;
+  }while(msg[i+1] != '$');//获取最终位置
+
+//文件处理函数
+  CountAl(al_set, file_addr, start_addr, end_addr);
+
+  for (j = 0; j < 26; j++){
+	printf("%c:%d\n",j+'a',al_set[j]);//打印结果
+	fflush(stdout);
+  }
+// send the message back to client
+  write(cs, al_set, 104);
+}
+				\end{lstlisting}
+				上述代码是worker执行的总体流程，下面是文件处理函数CountAl的内容。
+				\begin{lstlisting}[language={[ANSI]C}]
+void CountAl(int num[], char* addr, int start, int end){
+
+/*
+*num为26位整形数组，存储字母个数
+*addr为文件地址
+*start为起始位置，end为结束位置
+*/
+
+  char cmt_ptr[100];//每100个字符检测一组
+  int temp = 0;
+  int i = 0;
+  int j = 0;
+  int temp_r = (end - start) % 100; //求区间除以100的余数，即最后一组的元素个数
+  int temp_s;//求组的个数
+
+  if(temp_r == 0)
+	temp_s = (end - start) / 100;
+  else
+	temp_s = (end - start) / 100 + 1;
+
+  printf("start: %d ; end: %d\n",start,end);
+
+  FILE* fp = fopen(addr, "r");
+  if(NULL == fp)
+	return;
+
+  fseek(fp, start, SEEK_SET);
+
+  if(temp_r == 0){
+	for(i = 0; i < temp_s; i++){
+	  fread(cmt_ptr, 100, 1, fp);//提取监测数据
+
+	  for(j = 0; j < 100; j++){
+	    temp = cmt_ptr[j] - 'A';
+
+	    if(0 <= temp && temp <= 25)//不考虑大小写
+		  num[temp]++;
+	    else if(32 <= temp && temp <= 57)
+		  num[temp - 32]++;
+	  }
+  	}
+  }
+  else{//最后一组元素不满
+	for(i = 0; i < temp_s - 1; i++){
+	  fread(cmt_ptr, 100, 1, fp);//提取监测数据
+
+	  for(j = 0; j < 100; j++){
+		temp = cmt_ptr[j] - 'A';
+
+	  if(0 <= temp && temp <= 25)
+		num[temp]++;
+	  else if(32 <= temp && temp <= 57)
+		num[temp - 32]++;
+	  }
+	}
+
+    for(j = 0; j < 100; j++){//清除数组避免重复检测
+  	  cmt_ptr[j] = '\0';
+  	}
+
+    fread(cmt_ptr, temp_r, 1, fp);//根据余数检测最后一组
+	  for(j = 0; j < temp_r; j++){
+	    temp = cmt_ptr[j] - 'A';
+
+	    if(0 <= temp && temp <= 25)
+ 		  num[temp]++;
+	    else if(32 <= temp && temp <= 57)
+		  num[temp - 32]++;
+	  }
+  }
+  fclose(fp);
+  fp = NULL;
+}
+				\end{lstlisting}
+				上述即是检测字母个数的函数，最终字母个数存储在num即al\_set中发送回master。
+			\end{subsubsection}
+		\end{subsection}
+		\begin{subsection}{实验总结}
+			实验难度比较大，需要考虑很多因素，难在一些细节处理的部分，包括
+			\begin{enumerate}[1)]
+				\item 文件处理函数要考虑分组有余数的情况检测。
+				\item message解析时考虑分隔符后字符串的解析步骤。
+				\item 使用select时需要保留初始的fd\_set，因为select会清除输入的fd\_set。
+				\item 从配置文件中读取ip地址时的个数计数以及地址存储。
+			\end{enumerate}
+			总结来讲学到了很多socket编程知识，没有尝试多线程和epoll是不足之处。
+		\end{subsection}
+	\end{section}
+\end{document}
