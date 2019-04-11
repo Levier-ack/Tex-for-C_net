@@ -1,0 +1,219 @@
+\documentclass{article} %article 文档
+\usepackage{enumerate}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{pythonhighlight}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{ctex}  %使用宏包(为了能够显示汉字)
+\title{计算机网络实验：第四周实验}  %文章标题
+\author{秦宏 2016K8009929009}   %作者的名称
+\date{\today}       %日期
+% 设置页面的环境,a4纸张大小，左右上下边距信息
+\usepackage[a4paper,left=10mm,right=10mm,top=15mm,bottom=15mm]{geometry}  
+\pgfplotsset{compat=1.9,width=15cm}  
+ 
+\begin{document}
+\lstset{
+	keywordstyle= \color{ blue!70},
+	commentstyle= \color{red!50!green!50!blue!50}, 
+	frame=shadowbox, % 阴影效果
+	rulesepcolor= \color{ red!20!green!20!blue!20} ,
+	escapeinside=``, % 英文分号中可写入中文
+	xleftmargin=1em,xrightmargin=1em, aboveskip=1em
+}
+	\maketitle          %添加这一句才能够显示标题等信息
+	\begin{section}{交换机转发实验}
+		\begin{subsection}{实验内容}
+			\begin{enumerate}[1)]
+				\item 实现对数据结构mac\_port\_map的所有操作，以及数据包的转发和广播操作。
+					\begin{lstlisting}[language={[ANSI]C}]
+iface_info_t* lookup_port(u8 mac[ETH_ALEN]);
+void insert_mac_port(u8 mac[ETH_ALEN], iface_info_t* iface);
+int sweep_aged_mac_port_entry();
+void broadcast_packet(iface_info_t* iface, const char* packet, int len);
+void handle_packet(iface_info_t* iface, char* packet, int len);
+					\end{lstlisting}
+				\item 使用iperf和给定的拓扑进行实验，对比交换机转发与集线器广播的性能。	
+			\end{enumerate}
+			\end{subsection}
+		\begin{subsection}{实验流程}
+			\begin{enumerate}[1)]
+				\item 实现对数据结构mac\_port\_map的所有操作，和数据包的转发和广播操作，保证能够ping通。
+				\item 分别在s1先后运行hub和switch，使用iperf发送数据包测试传播速率。
+				\item 在h1，h2，h3均执行iperf -s后两个节点同时发送数据包，测试传播速率。
+			\end{enumerate}
+			\end{subsection}
+		\begin{subsection}{实验结果}
+		首先是switch和hub在单独发生一个数据包发送时的传输速率，由于只有一个传输方向，因此hub与switch的带宽利用率相近，均在0.94左右，差别不大。\vspace{3pt}
+		
+		然后是switch和hub运行时，选择两个端点同时向对方发送数据包，进行测试，首先是h2和h3相互发送数据包，实验结果如图1和图2,
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{hub_23.eps}	
+			\caption{hub节点下h2和h3互发数据}
+		\end{figure}
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{switch_23.eps}	
+			\caption{switch节点下h2和h3互发数据}
+		\end{figure}
+		由图1看到hub节点下，h2和h3互发数据时的带宽利用率为0.938和0.939.图2看到switch节点下，h2和h3互发数据时的带宽利用率为0.937和0.938，看到在hub节点或者switch节点的传输利用率是一样的，没有发现hub和switch的优劣。\vspace{3pt}
+		
+		然后选择了h1和h3节点相互发送数据包，实验结果如图3和图4,
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{hub_13.eps}	
+			\caption{hub节点下h1和h3互发数据}
+		\end{figure}
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{switch_13.eps}	
+			\caption{switch节点下h1和h3互发数据}
+		\end{figure}
+		由图3看到hub节点下，h1和h3互发数据时带宽利用率为0.499和0.495，图4看到switch节点下，h1和h3互发数据时的带宽利用率为0.945和0.905.(考虑到线路的带宽上限与线路带宽的最小值相等计算得到)。\vspace{3pt}
+		
+		然后进行了h1向h2、h3向h1同时发送数据包的测试，测试结果如图5，图6所示，
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{hub_1-2_3-1.eps}	
+			\caption{hub节点下1-2和3-1发数据}
+		\end{figure}
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{switch_1-2_3-1.eps}	
+			\caption{switch节点下1-2和3-1互发数据}
+		\end{figure}
+		由图5看到hub节点下，h1节点发送数据的带宽利用率为0.366，h3节点发送数据的带宽利用率为0.645，但是这个差值的原因还无法得知，我尝试将h1的1带宽调整到10或者比20大，结果仍然是h1带宽为h3的一半。还不能得知原因。\vspace{3pt}
+		
+		最后进行了sub和switch条件下h1向h2、h3发送数据以及h2、h3向h1发送数据的测试，测试结果如图7，图8，图9所示，
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{hub_2-1_3-1.eps}	
+			\caption{hub节点下2、3向1发数据}
+		\end{figure}
+		\begin{figure}[hp]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{hub1-2_1-3.eps}	
+			\caption{hub节点下1向2、3发数据}
+		\end{figure}
+		\begin{figure}[h]	
+			\centering
+			\includegraphics[width=\linewidth,scale=0.1]{switch_1-2_1-3.eps}	
+			\caption{switch节点下1向2、3发数据}
+		\end{figure}
+		由图7看到hub节点下2、3同时向1发送数据的带宽不受影响，因为1的带宽刚好容纳两条数据通路大小，但是图8中1同时向2、3发送时会出现带宽显著下降的情况，显然是广播条件下3的链路上有目标地址为2的数据包占用线路，因此带宽减半，到了图9中1向2、3发送消息时因为switch的选择性保证了2的数据包只会到2的线路上，因此3的带宽不受影响，可见交换机的性能高于集线器。\\
+		\end{subsection}
+		\begin{subsection}{实验分析}
+			\begin{enumerate}[1)]
+				\item hub会出现带宽下降的原因是hub是广播数据包的，当两个服务器同时发送数据包到hub时，hub将二者的数据包合并到另一条未传过来的链路上，图3中为h2，此时h2带宽上限为10M，相当于是h1和h3的带宽之和变成了10M，相应的带宽就会下降，反映到图5也是如此，都会因h2带宽限制而下降，而图1的hub之所以未变化是因为h1的带宽限制本身就是20M。
+				\item switch则会根据端口信息选择发送端口，这样数据包不会因为集中到一条无需到达的链路从而降低了带宽。结果如秃2，4，6，带宽基本不变。
+				\item 代码实现
+					\begin{lstlisting}[language={[ANSI]C}]
+iface_info_t *lookup_port(u8 mac[ETH_ALEN])//查找函数
+{
+  int hash_value = hash8(mac, ETH_ALEN);
+
+  mac_port_entry_t *entry = NULL;
+  mac_port_entry_t *p = NULL;
+
+  // pthread_mutex_lock(&mac_port_map.lock);
+
+  list_for_each_entry_safe(entry, p, &mac_port_map.hash_table[hash_value], list){
+	if (com_str(entry->mac, mac) == 0){
+		entry->visited = time(NULL);//刷新时间
+		return entry->iface;
+	}	
+  }
+  // pthread_mutex_unlock(&mac_port_map.lock);
+  // TODO: implement the lookup process here
+  fprintf(stdout, "TODO: implement the lookup process here.\n");
+  return NULL;
+}
+					\end{lstlisting}
+					\begin{lstlisting}[language={[ANSI]C}]
+// insert the mac -> iface mapping into mac_port table
+void insert_mac_port(u8 mac[ETH_ALEN], iface_info_t *iface)//插入函数
+{
+  int temp = hash8(mac, ETH_ALEN);
+
+  fprintf(stdout, "insert new mac_port\n");
+  mac_port_entry_t *ptr = (mac_port_entry_t *)malloc(sizeof(mac_port_entry_t));
+  bzero(ptr, sizeof(mac_port_entry_t));//为新节点初始化
+  init_list_head(&(ptr->list));
+  ptr->visited = time(NULL);
+  memcpy(ptr->mac, mac, ETH_ALEN*sizeof(u8));
+  fprintf(stdout, "test memcpy\n");
+  //memcpy(ptr->iface, iface, sizeof(iface_info_t));
+  ptr->iface = iface;
+
+  // pthread_mutex_lock(&mac_port_map.lock);	
+  list_add_head(&ptr->list, &mac_port_map.hash_table[temp]);//插入新节点		
+  // pthread_mutex_unlock(&mac_port_map.lock);
+  // TODO: implement the insertion process here
+  fprintf(stdout, "TODO: implement the insertion process here.\n");
+}
+					\end{lstlisting}
+					\begin{lstlisting}[language={[ANSI]C}]
+int sweep_aged_mac_port_entry()//老化函数
+{
+  int count = 0;
+  mac_port_entry_t *entry = NULL;
+  mac_port_entry_t *p = NULL;
+  time_t now = time(NULL);
+
+  pthread_mutex_lock(&mac_port_map.lock);
+  for (int i = 0; i < HASH_8BITS; i++){
+	list_for_each_entry_safe(entry, p, &mac_port_map.hash_table[i], list){
+	  if ((int)(now - entry->visited) > MAC_PORT_TIMEOUT){
+	    fprintf(stdout, "TODO: implement the sweeping process here.\n");
+	    list_delete_entry(&entry->list);
+	    count++;
+	    free(entry);
+	  }
+	}
+  }// TODO: implement the sweeping process here
+  pthread_mutex_unlock(&mac_port_map.lock);
+
+  return count;
+}
+					\end{lstlisting}
+					\begin{lstlisting}[language={[ANSI]C}]
+void handle_packet(iface_info_t *iface, char *packet, int len)
+{
+  struct ether_header *eh = (struct ether_header *)packet;
+  log(DEBUG, "the dst mac address is " ETHER_STRING "
+  	.\n", ETHER_FMT(eh->ether_dhost));
+  
+  iface_info_t *iface_ptr = lookup_port(eh->ether_dhost);//查找目标mac地址
+
+  // dump_mac_port_table();
+
+  if (iface_ptr != NULL){
+	fprintf(stdout, "find and send packet\n");
+	iface_send_packet(iface_ptr, packet, len);
+  }
+  else{
+	broadcast_packet(iface, packet, len);
+  }
+
+  iface_ptr = lookup_port(eh->ether_shost);
+
+  if (iface_ptr != NULL){
+	;
+  }
+  else{
+	insert_mac_port(eh->ether_shost, iface);//插入源mac地址
+  }
+  // TODO: implement the packet forwarding process here
+  fprintf(stdout, "TODO: implement the packet forwarding process here.\n");
+}
+					\end{lstlisting}
+			\end{enumerate}
+		\end{subsection}
+		\begin{subsection}{实验总结}
+			此次实验难度在于数据结构的理解，一开始我找不到mac端口存放接收mac地址和发送mac地址的存储位置，之后想明白了mac结构体不考虑接收和发送，只需要存储mac地址，这样代码就会简单许多。\\
+			另外这次实现insert函数时用到了最近刚刚温习的malloc函数，加深了对该函数的使用方法条件等的理解。
+		\end{subsection}
+	\end{section}
+\end{document}
